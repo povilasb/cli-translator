@@ -1,22 +1,29 @@
 import json
-import re
 
 import scrapy
+from scrapy.http.headers import Headers
 
-def fix_json(str_json):
-    str_json = re.sub(',+', ',', str_json)
-    return re.sub('\[,', '[0,', str_json)
+RENDER_HTML_URL = 'http://127.0.0.1:8050/render.html'
 
 class GoogleTranslateSpider(scrapy.Spider):
     name = 'Google Translate Spider'
-    start_urls = ['https://translate.google.com/translate_a/single?client=t&sl=en&tl=lt&hl=en&dt=at&dt=bd&dt=ex&dt=ld&dt=md&dt=qca&dt=rw&dt=rm&dt=ss&dt=t&ie=UTF-8&oe=UTF-8&otf=2&ssel=0&tsel=0&kc=4&tk=820370.698708&q=cognition']
+    start_urls = ['https://translate.google.com/#en/lt/']
+
+    def __init__(self, translate_this, *args, **kwargs):
+        super(GoogleTranslateSpider, self).__init__(*args, **kwargs)
+
+        self.translate_this = translate_this
+        self.start_urls[0] += translate_this
+
+    def start_requests(self):
+        for url in self.start_urls:
+            body = json.dumps({'url': url, 'wait': 0.5})
+            headers = Headers({'Content-Type': 'application/json'})
+            yield scrapy.Request(RENDER_HTML_URL, self.parse, method='POST',
+                                 body=body, headers=headers)
 
     def parse(self, response):
-        resp_body = response.body_as_unicode()
-        resp_body = fix_json(resp_body)
-        resp = json.loads(resp_body)
-
-        translations = resp[1][0][2]
-        words = [tr[0] for tr in translations]
-        for w in words:
-            print('\t' + w)
+        translations = response.css('.gt-baf-word-clickable::text').extract()
+        print('"%s" to LT:' % self.translate_this)
+        for t in translations:
+            print('\t%s' % t)
